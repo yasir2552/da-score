@@ -1,0 +1,168 @@
+:root {
+  /* Default DA/SCORE Classic Theme (Dark Green) */
+  --bg-primary: #0a140f;
+  --bg-secondary: #122119;
+  --bg-card: #182b21;
+  --bg-hover: #1f362a;
+  --accent-green: #00ff75;
+  --accent-gold: #ffcf25;
+  --accent-red: #ff4757;
+  --text-main: #ffffff;
+  --text-muted: #94a89c;
+  --border-color: rgba(255, 255, 255, 0.08);
+  --card-radius: 12px;
+  --font-heading: 'Outfit', sans-serif;
+  --font-body: 'Inter', sans-serif;
+  --shadow-glow: 0 4px 20px rgba(0, 255, 117, 0.15);
+}
+
+/* Açık Mavi & Beyaz Theme (Sky Blue & White) */
+[data-theme="skyblue"] {
+  --bg-primary: #f0f7ff;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: #e0f2fe;
+  --accent-green: #0284c7;
+  --accent-gold: #d97706;
+  --accent-red: #ef4444;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #cbd5e1;
+  --shadow-glow: 0 4px 16px rgba(2, 132, 199, 0.12);
+}
+
+[data-theme="amoled"] {
+  --bg-primary: #040406;
+  --bg-secondary: #0c0c10;
+  --bg-card: #121218;
+  --bg-hover: #1b1b24;
+  --accent-green: #34c759;
+  --accent-gold: #ff9500;
+  --accent-red: #ff3b30;
+  --text-main: #ffffff;
+  --text-muted: #8e8e93;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --shadow-glow: 0 4px 20px rgba(255, 59, 48, 0.2);
+}
+
+[data-theme="gold"] {
+  --bg-primary: #0b0b0e;
+  --bg-secondary: #13131a;
+  --bg-card: #1a1a24;
+  --bg-hover: #252533;
+  --accent-green: #e5c158;
+  --accent-gold: #ffd700;
+  --accent-red: #ff5252;
+  --text-main: #ffffff;
+  --text-muted: #a0a0b2;
+  --border-color: rgba(229, 193, 88, 0.15);
+  --shadow-glow: 0 4px 20px rgba(229, 193, 88, 0.15);
+}
+
+[data-theme="light"] {
+  --bg-primary: #f8fafc;
+  --bg-secondary: #ffffff;
+  --bg-card: #ffffff;
+  --bg-hover: #f1f5f9;
+  --accent-green: #10b981;
+  --accent-gold: #f59e0b;
+  --accent-red: #ef4444;
+  --text-main: #0f172a;
+  --text-muted: #64748b;
+  --border-color: #e2e8f0;
+  --shadow-glow: 0 4px 12px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: var(--font-body);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-color: var(--bg-primary);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background-color 0.25s ease, color 0.25s ease;
+}
+
+/* Custom Scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-primary);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--bg-hover);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--accent-green);
+}
+
+/* Animations */
+@keyframes pulseLive {
+  0% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.75; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+.live-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: var(--accent-red);
+  border-radius: 50%;
+  box-shadow: 0 0 8px var(--accent-red);
+  animation: pulseLive 1.2s infinite;
+}
+
+.live-badge {
+  background: rgba(239, 68, 68, 0.12);
+  color: var(--accent-red);
+  font-weight: 800;
+  padding: 3px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+/* Layout Container */
+.app-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px 60px 16px;
+}
+
+@media (max-width: 768px) {
+  .app-container {
+    padding: 0 10px 80px 10px;
+  }
+}
+
+/* Glass Card */
+.glass-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--card-radius);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+}
+
+/* Upcoming Badge */
+.upcoming-tag {
+  background: rgba(245, 158, 11, 0.12);
+  color: var(--accent-gold);
+  border: 1px solid rgba(245, 158, 11, 0.3);
+  padding: 3px 10px;
+  border-radius: 12px;
+  font-size: 0.72rem;
+  font-weight: 800;
+}

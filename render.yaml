@@ -1,0 +1,12 @@
+services:
+  - type: web
+    name: da-score-server
+    env: node
+    buildCommand: npm install && npm run build
+    startCommand: node server/index.js
+    envVars:
+      - key: PORT
+        value: 3001
+      - key: FOOTBALL_DATA_API_KEY
+        value: 6ded839f7c8444fa9088924e586414e8
+    healthCheckPath: /api/competitions
