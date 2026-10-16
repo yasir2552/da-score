@@ -10,6 +10,16 @@ function normalize(str) {
     .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c');
 }
 
+// Order priority:
+// 0: Live / In-play
+// 1: Finished
+// 2: Scheduled / Timed (Upcoming)
+function getStatusPriority(status) {
+  if (status === 'IN_PLAY' || status === 'PAUSED' || status === 'LIVE') return 0;
+  if (status === 'FINISHED') return 1;
+  return 2;
+}
+
 export default function MatchList({
   matches, competitions, matchFilter, searchQuery,
   favoriteMatchIds, onToggleFavorite, onSelectMatch
@@ -30,9 +40,18 @@ export default function MatchList({
     return true;
   });
 
-  // Group by league
+  // Sort matches so live/started matches appear at the top, then finished, then upcoming
+  const sortedMatches = [...filteredMatches].sort((a, b) => {
+    const prioA = getStatusPriority(a.status);
+    const prioB = getStatusPriority(b.status);
+    if (prioA !== prioB) return prioA - prioB;
+    // Secondary sort: utcDate
+    return new Date(a.utcDate) - new Date(b.utcDate);
+  });
+
+  // Group by league while preserving the sorted order
   const matchesByLeague = {};
-  filteredMatches.forEach(m => {
+  sortedMatches.forEach(m => {
     const leagueId = m.competition?.id || 'other';
     if (!matchesByLeague[leagueId]) {
       matchesByLeague[leagueId] = { info: m.competition, list: [] };
@@ -40,11 +59,18 @@ export default function MatchList({
     matchesByLeague[leagueId].list.push(m);
   });
 
+  // Sort leagues so leagues with LIVE matches appear FIRST!
+  const sortedLeagueEntries = Object.entries(matchesByLeague).sort(([, groupA], [, groupB]) => {
+    const minPrioA = Math.min(...groupA.list.map(m => getStatusPriority(m.status)));
+    const minPrioB = Math.min(...groupB.list.map(m => getStatusPriority(m.status)));
+    return minPrioA - minPrioB;
+  });
+
   const upcomingCompetitions = competitions.filter(c => c.isUpcoming);
 
   return (
     <div>
-      {Object.keys(matchesByLeague).length === 0 && (
+      {sortedLeagueEntries.length === 0 && (
         <div className="glass-card" style={{ padding: 40, textAlign: 'center', color: 'var(--text-muted)' }}>
           <Calendar size={48} style={{ opacity: 0.3, marginBottom: 12 }} />
           <h3 style={{ color: 'var(--text-main)', marginBottom: 6 }}>Bu kriterlere uygun maç bulunamadı</h3>
@@ -54,42 +80,51 @@ export default function MatchList({
         </div>
       )}
 
-      {Object.entries(matchesByLeague).map(([leagueId, group]) => (
-        <div key={leagueId} style={{ marginBottom: 24 }}>
-          {/* League Header */}
-          <div style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 14px',
-            background: 'var(--bg-secondary)',
-            borderRadius: '10px 10px 0 0',
-            marginBottom: 2,
-            border: '1px solid var(--border-color)',
-            borderLeft: '4px solid var(--accent-green)',
-          }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-              <span style={{ fontSize: '1.1rem' }}>{group.info?.area?.emoji || '⚽'}</span>
-              <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-main)' }}>
-                {group.info?.name || 'Lig / Turnuva'}
+      {sortedLeagueEntries.map(([leagueId, group]) => {
+        const hasLive = group.list.some(m => m.status === 'IN_PLAY' || m.status === 'PAUSED');
+
+        return (
+          <div key={leagueId} style={{ marginBottom: 24 }}>
+            {/* League Header */}
+            <div style={{
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '10px 14px',
+              background: 'var(--bg-secondary)',
+              borderRadius: '10px 10px 0 0',
+              marginBottom: 2,
+              border: '1px solid var(--border-color)',
+              borderLeft: hasLive ? '4px solid var(--accent-red)' : '4px solid var(--accent-green)',
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: '1.1rem' }}>{group.info?.area?.emoji || '⚽'}</span>
+                <span style={{ fontWeight: 800, fontSize: '0.98rem', color: 'var(--text-main)' }}>
+                  {group.info?.name || 'Lig / Turnuva'}
+                </span>
+                {hasLive && (
+                  <span className="live-badge" style={{ padding: '2px 8px', fontSize: '0.7rem' }}>
+                    <span className="live-pulse"></span> CANLI
+                  </span>
+                )}
+              </div>
+              <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
+                {group.list.length} Maç
               </span>
             </div>
-            <span style={{ fontSize: '0.78rem', fontWeight: 700, color: 'var(--text-muted)' }}>
-              {group.list.length} Maç
-            </span>
-          </div>
 
-          <div style={{ border: '1px solid var(--border-color)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
-            {group.list.map(match => (
-              <MatchCard
-                key={match.id}
-                match={match}
-                onSelectMatch={onSelectMatch}
-                favoriteMatchIds={favoriteMatchIds}
-                onToggleFavorite={onToggleFavorite}
-              />
-            ))}
+            <div style={{ border: '1px solid var(--border-color)', borderTop: 'none', borderRadius: '0 0 10px 10px', overflow: 'hidden' }}>
+              {group.list.map(match => (
+                <MatchCard
+                  key={match.id}
+                  match={match}
+                  onSelectMatch={onSelectMatch}
+                  favoriteMatchIds={favoriteMatchIds}
+                  onToggleFavorite={onToggleFavorite}
+                />
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
 
       {upcomingCompetitions.length > 0 && (
         <div style={{ marginTop: 40, borderTop: '1px dashed var(--border-color)', paddingTop: 24 }}>

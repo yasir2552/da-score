@@ -1,14 +1,33 @@
 import React from 'react';
-import { Volume2, VolumeX, Search, Sliders } from 'lucide-react';
+import { Volume2, VolumeX, Search, Sliders, Calendar } from 'lucide-react';
 
 export default function Header({
   searchQuery,
   setSearchQuery,
   soundEnabled,
   setSoundEnabled,
+  selectedDate,
+  setSelectedDate,
   onOpenCustomization,
   liveCount
 }) {
+  const getTodayISO = () => new Date().toISOString().split('T')[0];
+  const getOffsetDateISO = (offsetDays) => {
+    const d = new Date();
+    d.setDate(d.getDate() + offsetDays);
+    return d.toISOString().split('T')[0];
+  };
+
+  const yesterdayISO = getOffsetDateISO(-1);
+  const todayISO     = getTodayISO();
+  const tomorrowISO  = getOffsetDateISO(1);
+
+  const quickDates = [
+    { label: 'Dün',   value: yesterdayISO },
+    { label: 'Bugün', value: todayISO },
+    { label: 'Yarın', value: tomorrowISO },
+  ];
+
   return (
     <header style={{
       background: 'var(--bg-secondary)',
@@ -51,6 +70,62 @@ export default function Header({
           </div>
         </div>
 
+        {/* Working Dün / Bugün / Yarın Date Filter */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 4,
+          background: 'var(--bg-primary)',
+          padding: 4,
+          borderRadius: 10,
+          border: '1px solid var(--border-color)'
+        }}>
+          {quickDates.map(qd => {
+            const isActive = selectedDate === qd.value;
+            return (
+              <button
+                key={qd.value}
+                onClick={() => setSelectedDate(qd.value)}
+                style={{
+                  background: isActive ? 'var(--accent-green)' : 'transparent',
+                  color: isActive ? '#000000' : 'var(--text-main)',
+                  fontWeight: isActive ? 900 : 600,
+                  border: 'none',
+                  padding: '6px 14px',
+                  borderRadius: 8,
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                  transition: 'all 0.15s ease'
+                }}
+              >
+                {qd.label}
+              </button>
+            );
+          })}
+
+          {/* Optional custom date picker */}
+          <label style={{
+            display: 'flex',
+            alignItems: 'center',
+            padding: '6px 8px',
+            cursor: 'pointer',
+            color: 'var(--text-muted)'
+          }} title="Tarih Seç">
+            <Calendar size={15} />
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+              style={{
+                position: 'absolute',
+                opacity: 0,
+                width: 20,
+                cursor: 'pointer'
+              }}
+            />
+          </label>
+        </div>
+
         {/* Search & Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Search Box */}
@@ -73,11 +148,11 @@ export default function Header({
                 color: 'var(--text-main)',
                 fontSize: '0.82rem',
                 outline: 'none',
-                width: 190,
+                width: 170,
                 transition: 'all 0.2s ease'
               }}
-              onFocus={(e) => e.target.style.width = '230px'}
-              onBlur={(e) => e.target.style.width = '190px'}
+              onFocus={(e) => e.target.style.width = '210px'}
+              onBlur={(e) => e.target.style.width = '170px'}
             />
           </div>
 

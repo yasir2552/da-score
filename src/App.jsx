@@ -133,6 +133,8 @@ export default function App() {
         setSearchQuery={setSearchQuery}
         soundEnabled={soundEnabled}
         setSoundEnabled={setSoundEnabled}
+        selectedDate={selectedDate}
+        setSelectedDate={setSelectedDate}
         onOpenCustomization={() => setIsCustomizationOpen(true)}
         liveCount={liveCount}
       />
