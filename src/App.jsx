@@ -8,6 +8,7 @@ import MatchDetailModal from './components/MatchDetailModal';
 import CustomizationModal from './components/CustomizationModal';
 import { useFootballData } from './hooks/useFootballData';
 import { audioService } from './services/audio';
+import SocialFooter from './components/SocialFooter';
 
 // ── Goal Notification Banner ──────────────────────────────────────────────────
 function GoalBanner({ goals, onDone }) {
@@ -172,6 +173,8 @@ export default function App() {
           </>
         )}
       </main>
+
+      <SocialFooter />
 
       {selectedMatchId && (
         <MatchDetailModal
