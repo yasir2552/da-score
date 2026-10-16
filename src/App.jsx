@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from './components/Header';
 import Navigation from './components/Navigation';
 import MatchList from './components/MatchList';
@@ -6,10 +6,10 @@ import StandingsTable from './components/StandingsTable';
 import TopScorers from './components/TopScorers';
 import MatchDetailModal from './components/MatchDetailModal';
 import CustomizationModal from './components/CustomizationModal';
-import { fetchMatches, fetchCompetitions } from './services/api';
+import { useFootballData } from './hooks/useFootballData';
 import { audioService } from './services/audio';
 
-// Goal Notification Banner Component
+// ── Goal Notification Banner ──────────────────────────────────────────────────
 function GoalBanner({ goals, onDone }) {
   const [visible, setVisible] = useState(true);
 
@@ -21,112 +21,85 @@ function GoalBanner({ goals, onDone }) {
     return () => clearTimeout(t);
   }, []);
 
-  if (!goals || goals.length === 0) return null;
+  if (!goals?.length) return null;
   const g = goals[0];
 
   return (
     <div className={`goal-banner${visible ? '' : ' out'}`}>
       <span style={{ fontSize: '1.4rem' }}>⚽</span>
-      <span>GOL! {g.team} — {g.scorer}</span>
+      <span>GOL! {g.team} — {g.score}</span>
       <span style={{ fontSize: '1.2rem' }}>🎉</span>
     </div>
   );
 }
 
+// ── Last Updated indicator ────────────────────────────────────────────────────
+function LastUpdatedBadge({ lastUpdated }) {
+  if (!lastUpdated) return null;
+  const t = lastUpdated.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  return (
+    <div style={{
+      textAlign: 'center', fontSize: '0.72rem',
+      color: 'var(--text-muted)', padding: '4px 0 8px',
+      opacity: 0.7
+    }}>
+      Son güncelleme: {t} · Her 60 saniyede otomatik yenilenir
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 export default function App() {
   const todayStr = new Date().toISOString().split('T')[0];
-  const [selectedDate, setSelectedDate] = useState(todayStr);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [activeTab, setActiveTab] = useState('matches');
-  const [matchFilter, setMatchFilter] = useState('all');
 
-  const [matches, setMatches] = useState([]);
-  const [competitions, setCompetitions] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  const [selectedMatchId, setSelectedMatchId] = useState(null);
-  const [goalNotification, setGoalNotification] = useState(null);
-
-  // Customization (with localStorage)
-  const [theme, setTheme] = useState(() => localStorage.getItem('da_theme') || 'skyblue');
-  const [soundEnabled, setSoundEnabled] = useState(() => localStorage.getItem('da_sound_enabled') !== 'false');
-  const [soundType, setSoundType] = useState(() => localStorage.getItem('da_sound_type') || 'whistle');
-  const [favoriteTeams, setFavoriteTeams] = useState(() => JSON.parse(localStorage.getItem('da_fav_teams') || '[]'));
-  const [favoriteMatchIds, setFavoriteMatchIds] = useState(() => JSON.parse(localStorage.getItem('da_fav_matches') || '[]'));
+  const [selectedDate,       setSelectedDate]       = useState(todayStr);
+  const [searchQuery,        setSearchQuery]        = useState('');
+  const [activeTab,          setActiveTab]          = useState('matches');
+  const [matchFilter,        setMatchFilter]        = useState('all');
+  const [selectedMatchId,    setSelectedMatchId]    = useState(null);
+  const [goalNotification,   setGoalNotification]   = useState(null);
   const [isCustomizationOpen, setIsCustomizationOpen] = useState(false);
 
-  const prevMatchesRef = useRef([]);
+  // ── Persisted preferences ─────────────────────────────────────────────────
+  const [theme,         setTheme]         = useState(() => localStorage.getItem('da_theme')         || 'skyblue');
+  const [soundEnabled,  setSoundEnabled]  = useState(() => localStorage.getItem('da_sound_enabled') !== 'false');
+  const [soundType,     setSoundType]     = useState(() => localStorage.getItem('da_sound_type')    || 'whistle');
+  const [favoriteTeams, setFavoriteTeams] = useState(() => JSON.parse(localStorage.getItem('da_fav_teams')   || '[]'));
+  const [favoriteMatchIds, setFavoriteMatchIds] = useState(() => JSON.parse(localStorage.getItem('da_fav_matches') || '[]'));
 
-  // Theme sync
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme);
-    localStorage.setItem('da_theme', theme);
-  }, [theme]);
-
+  // ── Theme sync ────────────────────────────────────────────────────────────
+  useEffect(() => { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('da_theme', theme); }, [theme]);
   useEffect(() => { localStorage.setItem('da_sound_enabled', soundEnabled); }, [soundEnabled]);
   useEffect(() => { localStorage.setItem('da_sound_type', soundType); }, [soundType]);
   useEffect(() => { localStorage.setItem('da_fav_teams', JSON.stringify(favoriteTeams)); }, [favoriteTeams]);
   useEffect(() => { localStorage.setItem('da_fav_matches', JSON.stringify(favoriteMatchIds)); }, [favoriteMatchIds]);
 
-  // Load competitions
+  // ── Data via custom hook (football-data.org, 60s polling) ─────────────────
+  const {
+    matches,
+    competitions,
+    loading,
+    lastUpdated,
+    goalEvents,
+    clearGoalEvents,
+  } = useFootballData({
+    date: selectedDate,
+    soundEnabled,
+    soundType,
+    audioService,
+  });
+
+  // ── Show goal banner when new goals arrive ────────────────────────────────
   useEffect(() => {
-    fetchCompetitions().then(setCompetitions);
-  }, []);
-
-  // Load matches and detect goals
-  const loadMatchesData = useCallback(async () => {
-    const data = await fetchMatches(selectedDate);
-
-    if (prevMatchesRef.current.length > 0) {
-      const goals = [];
-
-      data.forEach(newM => {
-        const oldM = prevMatchesRef.current.find(m => m.id === newM.id);
-        if (!oldM || oldM.status !== 'IN_PLAY') return;
-
-        const oldHome = oldM.score?.fullTime?.home ?? 0;
-        const oldAway = oldM.score?.fullTime?.away ?? 0;
-        const newHome = newM.score?.fullTime?.home ?? 0;
-        const newAway = newM.score?.fullTime?.away ?? 0;
-
-        if (newHome > oldHome) {
-          goals.push({ team: newM.homeTeam?.shortName || newM.homeTeam?.name, scorer: `${newHome}-${newAway}` });
-        }
-        if (newAway > oldAway) {
-          goals.push({ team: newM.awayTeam?.shortName || newM.awayTeam?.name, scorer: `${newHome}-${newAway}` });
-        }
-      });
-
-      if (goals.length > 0) {
-        if (soundEnabled) audioService.playGoalSound(soundType);
-        setGoalNotification(goals);
-      }
+    if (goalEvents.length > 0) {
+      setGoalNotification(goalEvents);
+      clearGoalEvents();
     }
+  }, [goalEvents, clearGoalEvents]);
 
-    prevMatchesRef.current = data;
-    setMatches(data);
-    setLoading(false);
-  }, [selectedDate, soundEnabled, soundType]);
-
-  useEffect(() => {
-    setLoading(true);
-    loadMatchesData();
-  }, [selectedDate]);
-
-  // Auto-refresh: every 6 seconds
-  useEffect(() => {
-    const interval = setInterval(loadMatchesData, 6000);
-    return () => clearInterval(interval);
-  }, [loadMatchesData]);
-
-  const handleToggleFavorite = (matchId) => {
-    setFavoriteMatchIds(prev =>
-      prev.includes(matchId) ? prev.filter(id => id !== matchId) : [...prev, matchId]
-    );
-  };
-
-  const liveMatchesCount = matches.filter(m =>
-    m.status === 'IN_PLAY' || m.status === 'PAUSED' || m.status === 'LIVE'
+  // ── Derived state ─────────────────────────────────────────────────────────
+  const liveCount = matches.filter(m =>
+    m.status === 'IN_PLAY' || m.status === 'PAUSED'
   ).length;
 
   const displayMatches = activeTab === 'favorites'
@@ -137,9 +110,16 @@ export default function App() {
       )
     : matches;
 
+  const handleToggleFavorite = (matchId) => {
+    setFavoriteMatchIds(prev =>
+      prev.includes(matchId) ? prev.filter(id => id !== matchId) : [...prev, matchId]
+    );
+  };
+
+  // ─────────────────────────────────────────────────────────────────────────
   return (
     <div className="app-root">
-      {/* Goal Notification Banner */}
+      {/* Goal Banner */}
       {goalNotification && (
         <GoalBanner
           goals={goalNotification}
@@ -155,7 +135,7 @@ export default function App() {
         selectedDate={selectedDate}
         setSelectedDate={setSelectedDate}
         onOpenCustomization={() => setIsCustomizationOpen(true)}
-        liveCount={liveMatchesCount}
+        liveCount={liveCount}
       />
 
       <Navigation
@@ -166,10 +146,15 @@ export default function App() {
       />
 
       <main className="app-container">
+        {/* Last updated timestamp */}
+        {!loading && <LastUpdatedBadge lastUpdated={lastUpdated} />}
+
         {loading ? (
           <div className="glass-card" style={{ padding: 60, textAlign: 'center' }}>
             <div className="spinner"></div>
-            <p style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Canlı futbol verileri yükleniyor...</p>
+            <p style={{ color: 'var(--text-muted)', fontWeight: 600, marginTop: 8 }}>
+              football-data.org'dan güncel maçlar yükleniyor…
+            </p>
           </div>
         ) : (
           <>
@@ -185,7 +170,7 @@ export default function App() {
               />
             )}
             {activeTab === 'standings' && <StandingsTable competitions={competitions} />}
-            {activeTab === 'scorers' && <TopScorers competitions={competitions} />}
+            {activeTab === 'scorers'   && <TopScorers   competitions={competitions} />}
           </>
         )}
       </main>
@@ -200,14 +185,10 @@ export default function App() {
       <CustomizationModal
         isOpen={isCustomizationOpen}
         onClose={() => setIsCustomizationOpen(false)}
-        theme={theme}
-        setTheme={setTheme}
-        soundEnabled={soundEnabled}
-        setSoundEnabled={setSoundEnabled}
-        soundType={soundType}
-        setSoundType={setSoundType}
-        favoriteTeams={favoriteTeams}
-        setFavoriteTeams={setFavoriteTeams}
+        theme={theme} setTheme={setTheme}
+        soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled}
+        soundType={soundType} setSoundType={setSoundType}
+        favoriteTeams={favoriteTeams} setFavoriteTeams={setFavoriteTeams}
       />
     </div>
   );

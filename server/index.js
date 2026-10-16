@@ -16,282 +16,266 @@ const PORT = process.env.PORT || 3001;
 app.use(cors());
 app.use(express.json());
 
-// In-Memory Cache (TTL: 4 seconds for fast 6-second polling)
-const cache = new Map();
-const CACHE_TTL = 4000;
+// ─── football-data.org Config ────────────────────────────────────────────────
+const FD_API_KEY = process.env.FOOTBALL_DATA_API_KEY || '6ded839f7c8444fa9088924e586414e8';
+const FD_BASE    = 'https://api.football-data.org/v4';
+const FD_HEADERS = { 'X-Auth-Token': FD_API_KEY };
+
+// ─── In-Memory Cache (50 s TTL – frontend polls every 60 s) ──────────────────
+const cache    = new Map();
+const CACHE_TTL = 50_000; // 50 seconds
 
 function getCached(key) {
   const item = cache.get(key);
-  if (item && (Date.now() - item.timestamp < CACHE_TTL)) {
-    return item.data;
-  }
+  if (item && Date.now() - item.ts < CACHE_TTL) return item.data;
   return null;
 }
-
 function setCache(key, data) {
-  cache.set(key, { timestamp: Date.now(), data });
+  cache.set(key, { ts: Date.now(), data });
 }
 
-// League Definitions Mapping
-const LEAGUES = [
-  { id: 9901, code: 'TSL', espn: 'tur.1', name: 'Trendyol Süper Lig', flag: '🇹🇷', area: { name: 'Türkiye', emoji: '🇹🇷' } },
-  { id: 2021, code: 'PL', espn: 'eng.1', name: 'Premier League', flag: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', area: { name: 'İngiltere', emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' } },
-  { id: 2001, code: 'CL', espn: 'uefa.champions', name: 'UEFA Şampiyonlar Ligi', flag: '🇪🇺', area: { name: 'Avrupa', emoji: '🇪🇺' } },
-  { id: 2014, code: 'PD', espn: 'esp.1', name: 'La Liga', flag: '🇪🇸', area: { name: 'İspanya', emoji: '🇪🇸' } },
-  { id: 2019, code: 'SA', espn: 'ita.1', name: 'Serie A', flag: '🇮🇹', area: { name: 'İtalya', emoji: '🇮🇹' } },
-  { id: 2002, code: 'BL1', espn: 'ger.1', name: 'Bundesliga', flag: '🇩🇪', area: { name: 'Almanya', emoji: '🇩🇪' } },
-  { id: 2015, code: 'FL1', espn: 'fra.1', name: 'Ligue 1', flag: '🇫🇷', area: { name: 'Fransa', emoji: '🇫🇷' } },
-  { id: 9902, code: 'T1L', espn: 'tur.2', isUpcoming: true, name: 'Trendyol 1. Lig', flag: '🇹🇷', area: { name: 'Türkiye', emoji: '🇹🇷' } },
-  { id: 9903, code: 'SPL', espn: 'sau.1', isUpcoming: true, name: 'Suudi Arabistan Pro Lig', flag: '🇸🇦', area: { name: 'Suudi Arabistan', emoji: '🇸🇦' } },
-  { id: 9904, code: 'MLS', espn: 'usa.1', isUpcoming: true, name: 'Major League Soccer (MLS)', flag: '🇺🇸', area: { name: 'ABD', emoji: '🇺🇸' } }
+// ─── League / Competition Metadata ───────────────────────────────────────────
+// fd: football-data competition ID
+const COMPETITIONS = [
+  { fd: 2021, code: 'PL',  name: 'Premier League',           area: { name: 'İngiltere',  emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' } },
+  { fd: 2001, code: 'CL',  name: 'UEFA Şampiyonlar Ligi',    area: { name: 'Avrupa',     emoji: '🇪🇺' } },
+  { fd: 2014, code: 'PD',  name: 'La Liga',                  area: { name: 'İspanya',    emoji: '🇪🇸' } },
+  { fd: 2019, code: 'SA',  name: 'Serie A',                  area: { name: 'İtalya',     emoji: '🇮🇹' } },
+  { fd: 2002, code: 'BL1', name: 'Bundesliga',               area: { name: 'Almanya',    emoji: '🇩🇪' } },
+  { fd: 2015, code: 'FL1', name: 'Ligue 1',                  area: { name: 'Fransa',     emoji: '🇫🇷' } },
+  { fd: 2003, code: 'EL',  name: 'UEFA Avrupa Ligi',         area: { name: 'Avrupa',     emoji: '🇪🇺' } },
+  { fd: 2018, code: 'EL2', name: 'UEFA Konferans Ligi',      area: { name: 'Avrupa',     emoji: '🇪🇺' } },
+  { fd: 2017, code: 'PPL', name: 'Primeira Liga',            area: { name: 'Portekiz',   emoji: '🇵🇹' } },
+  { fd: 2016, code: 'ELC', name: 'Championship',             area: { name: 'İngiltere',  emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' } },
+  { fd: 2013, code: 'BSA', name: 'Brasileirão Série A',      area: { name: 'Brezilya',   emoji: '🇧🇷' } },
+  { fd: 2000, code: 'WC',  name: 'FIFA Dünya Kupası',        area: { name: 'Dünya',      emoji: '🌍' } },
 ];
 
-// ESPN Real-Time Scoreboard Fetcher
-async function fetchESPNMatches(espnLeagueCode, compInfo) {
-  const cacheKey = `espn_matches_${espnLeagueCode}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+// Upcoming / soon leagues (no real-time data)
+const UPCOMING = [
+  { code: 'TSL',  name: 'Trendyol Süper Lig',           area: { name: 'Türkiye',      emoji: '🇹🇷' }, isUpcoming: true },
+  { code: 'T1L',  name: 'Trendyol 1. Lig',              area: { name: 'Türkiye',      emoji: '🇹🇷' }, isUpcoming: true },
+  { code: 'SPL',  name: 'Suudi Arabistan Pro Lig',       area: { name: 'S. Arabistan', emoji: '🇸🇦' }, isUpcoming: true },
+  { code: 'MLS',  name: 'Major League Soccer',           area: { name: 'ABD',          emoji: '🇺🇸' }, isUpcoming: true },
+];
+
+// ─── Helper: fetch from football-data.org ────────────────────────────────────
+async function fdFetch(path) {
+  const res = await fetch(`${FD_BASE}${path}`, { headers: FD_HEADERS });
+  if (!res.ok) throw new Error(`football-data API ${res.status}: ${path}`);
+  return res.json();
+}
+
+// ─── Normalise a single match from football-data.org ─────────────────────────
+function normaliseMatch(m) {
+  const comp = COMPETITIONS.find(c => c.fd === m.competition?.id) || {
+    fd:   m.competition?.id,
+    code: m.competition?.code || 'UNK',
+    name: m.competition?.name || 'Bilinmeyen Lig',
+    area: { name: m.area?.name || '', emoji: areaEmoji(m.area?.code) }
+  };
+
+  return {
+    id:     m.id,
+    competition: { id: comp.fd, code: comp.code, name: comp.name, area: comp.area },
+    utcDate: m.utcDate,
+    status:  m.status,       // SCHEDULED | TIMED | IN_PLAY | PAUSED | FINISHED | POSTPONED
+    minute:  m.minute ?? null,
+    venue:   m.venue ?? null,
+    homeTeam: {
+      id:        m.homeTeam?.id,
+      name:      m.homeTeam?.name      || 'Ev Sahibi',
+      shortName: m.homeTeam?.shortName || m.homeTeam?.tla || m.homeTeam?.name,
+      crest:     m.homeTeam?.crest     || null,
+    },
+    awayTeam: {
+      id:        m.awayTeam?.id,
+      name:      m.awayTeam?.name      || 'Deplasman',
+      shortName: m.awayTeam?.shortName || m.awayTeam?.tla || m.awayTeam?.name,
+      crest:     m.awayTeam?.crest     || null,
+    },
+    score: {
+      fullTime: {
+        home: m.score?.fullTime?.home ?? null,
+        away: m.score?.fullTime?.away ?? null,
+      },
+      halfTime: {
+        home: m.score?.halfTime?.home ?? null,
+        away: m.score?.halfTime?.away ?? null,
+      },
+      winner: m.score?.winner ?? null,
+    },
+    // football-data.org free tier does not supply live stats; we leave null
+    stats: null,
+    events: [],
+  };
+}
+
+function areaEmoji(code) {
+  const map = {
+    ENG: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ESP: '🇪🇸', ITA: '🇮🇹', DEU: '🇩🇪', FRA: '🇫🇷',
+    PRT: '🇵🇹', BRA: '🇧🇷', USA: '🇺🇸', TUR: '🇹🇷', EUR: '🇪🇺', WLD: '🌍',
+  };
+  return map[code] || '⚽';
+}
+
+// ─── Fetch today's matches (all competitions) ─────────────────────────────────
+async function fetchTodayMatches(dateStr) {
+  const key = `fd_matches_${dateStr}`;
+  const hit = getCached(key);
+  if (hit) return hit;
 
   try {
-    const url = `https://site.api.espn.com/apis/site/v2/sports/soccer/${espnLeagueCode}/scoreboard`;
-    const res = await fetch(url);
-    if (!res.ok) return [];
-
-    const data = await res.json();
-    const events = data?.events || [];
-
-    const parsed = events.map(ev => {
-      const comp = ev.competitions?.[0];
-      const home = comp?.competitors?.find(c => c.homeAway === 'home');
-      const away = comp?.competitors?.find(c => c.homeAway === 'away');
-
-      const state = ev.status?.type?.state; // 'in', 'post', 'pre'
-      let status = 'TIMED';
-      if (state === 'in') status = 'IN_PLAY';
-      if (state === 'post') status = 'FINISHED';
-
-      const minute = ev.status?.displayClock ? parseInt(ev.status.displayClock) : (status === 'IN_PLAY' ? 45 : 0);
-
-      // Parse match events
-      const eventsList = (comp?.details || []).map(d => ({
-        time: d.clock?.displayValue || `${d.time || 0}'`,
-        type: d.type?.text?.includes('Goal') ? 'GOAL' : 'CARD',
-        team: d.team?.displayName || '',
-        player: d.athletesInvolved?.[0]?.displayName || 'Oyuncu',
-        score: d.scoreValue ? `${d.scoreValue}` : ''
-      }));
-
-      // Real stats from ESPN
-      const getStat = (key) => {
-        const homeStat = home?.statistics?.find(s => s.name === key);
-        const awayStat = away?.statistics?.find(s => s.name === key);
-        if (homeStat || awayStat) {
-          return [parseInt(homeStat?.displayValue || 0), parseInt(awayStat?.displayValue || 0)];
-        }
-        return null;
-      };
-
-      const possession = getStat('possessionPct') || getStat('possession');
-      const shotsOnTarget = getStat('shotsOnTarget') || getStat('onTargetAttempts');
-      const fouls = getStat('foulsCommitted') || getStat('fouls');
-      const corners = getStat('cornerKicks') || getStat('corners');
-      const yellowCards = getStat('yellowCards');
-      const offsides = getStat('offsides');
-
-      // Fallback realistic stats only for live/finished games
-      const isActive = status === 'IN_PLAY' || status === 'FINISHED';
-
-      const buildStat = (real, fallbackHome, fallbackAway) => {
-        if (real) return real;
-        if (!isActive) return null;
-        return [fallbackHome, fallbackAway];
-      };
-
-      const homeId = home?.team?.id;
-      const awayId = away?.team?.id;
-
-      return {
-        id: ev.id,
-        competition: {
-          id: compInfo.id,
-          name: compInfo.name,
-          code: compInfo.code,
-          area: compInfo.area
-        },
-        utcDate: ev.date,
-        status,
-        minute,
-        homeTeam: {
-          id: homeId || 1,
-          name: home?.team?.displayName || 'Ev Sahibi',
-          shortName: home?.team?.shortDisplayName || home?.team?.abbreviation || home?.team?.displayName,
-          crest: home?.team?.logo || (homeId ? `https://a.espncdn.com/i/teamlogos/soccer/500/${homeId}.png` : null)
-        },
-        awayTeam: {
-          id: awayId || 2,
-          name: away?.team?.displayName || 'Deplasman',
-          shortName: away?.team?.shortDisplayName || away?.team?.abbreviation || away?.team?.displayName,
-          crest: away?.team?.logo || (awayId ? `https://a.espncdn.com/i/teamlogos/soccer/500/${awayId}.png` : null)
-        },
-        score: {
-          fullTime: {
-            home: home?.score !== undefined ? parseInt(home.score) : null,
-            away: away?.score !== undefined ? parseInt(away.score) : null
-          }
-        },
-        events: eventsList,
-        stats: {
-          possession: buildStat(possession, 54, 46),
-          shotsOnTarget: buildStat(shotsOnTarget, 5, 3),
-          fouls: buildStat(fouls, 10, 8),
-          corners: buildStat(corners, 4, 3),
-          yellowCards: buildStat(yellowCards, 1, 1),
-          offsides: buildStat(offsides, 2, 1)
-        }
-      };
-    });
-
-    setCache(cacheKey, parsed);
-    return parsed;
+    const data = await fdFetch(`/matches?date=${dateStr}`);
+    const matches = (data.matches || []).map(normaliseMatch);
+    setCache(key, matches);
+    return matches;
   } catch (err) {
-    console.error(`[ESPN Fetch Error ${espnLeagueCode}]`, err.message);
+    console.error('[FD Matches Error]', err.message);
     return [];
   }
 }
 
-// ESPN Real-Time Standings Fetcher
-async function fetchESPNStandings(espnLeagueCode, compInfo) {
-  const cacheKey = `espn_standings_${espnLeagueCode}`;
-  const cached = getCached(cacheKey);
-  if (cached) return cached;
+// ─── Fetch standings for a competition ───────────────────────────────────────
+async function fetchStandings(compId, compInfo) {
+  const key = `fd_standings_${compId}`;
+  const hit = getCached(key);
+  if (hit) return hit;
 
   try {
-    const url = `https://site.api.espn.com/apis/v2/sports/soccer/${espnLeagueCode}/standings`;
-    const res = await fetch(url);
-    if (!res.ok) return null;
+    const data = await fdFetch(`/competitions/${compId}/standings`);
+    const raw  = data.standings?.[0]?.table || [];
 
-    const data = await res.json();
-    const group = data?.children?.[0]?.standings || data?.standings;
-    const entries = group?.entries || [];
-
-    const table = entries.map((e, idx) => {
-      const getStat = (name) => {
-        const item = e.stats?.find(s => s.name === name);
-        return item ? parseInt(item.value) : 0;
-      };
-
-      return {
-        position: idx + 1,
-        team: {
-          id: e.team?.id || idx + 1,
-          name: e.team?.displayName || e.team?.name,
-          shortName: e.team?.shortDisplayName || e.team?.name,
-          crest: e.team?.logos?.[0]?.href || `https://a.espncdn.com/i/teamlogos/soccer/500/${e.team?.id}.png`
-        },
-        playedGames: getStat('gamesPlayed'),
-        won: getStat('wins'),
-        draw: getStat('ties'),
-        lost: getStat('losses'),
-        goalsFor: getStat('pointsFor'),
-        goalsAgainst: getStat('pointsAgainst'),
-        goalDifference: getStat('pointDifferential'),
-        points: getStat('points')
-      };
-    });
+    const table = raw.map(row => ({
+      position:       row.position,
+      team: {
+        id:        row.team?.id,
+        name:      row.team?.name,
+        shortName: row.team?.shortName || row.team?.tla || row.team?.name,
+        crest:     row.team?.crest || null,
+      },
+      playedGames:    row.playedGames,
+      won:            row.won,
+      draw:           row.draw,
+      lost:           row.lost,
+      goalsFor:       row.goalsFor,
+      goalsAgainst:   row.goalsAgainst,
+      goalDifference: row.goalDifference,
+      points:         row.points,
+    }));
 
     const result = {
       competition: compInfo,
-      standings: [
-        {
-          stage: "REGULAR_SEASON",
-          type: "TOTAL",
-          table
-        }
-      ]
+      standings: [{ stage: 'REGULAR_SEASON', type: 'TOTAL', table }]
     };
-
-    setCache(cacheKey, result);
+    setCache(key, result);
     return result;
   } catch (err) {
-    console.error(`[ESPN Standings Error ${espnLeagueCode}]`, err.message);
+    console.error(`[FD Standings Error ${compId}]`, err.message);
     return null;
   }
 }
 
-// GET /api/competitions
-app.get('/api/competitions', (req, res) => {
-  res.json({ competitions: LEAGUES });
-});
+// ─── Fetch top scorers for a competition ─────────────────────────────────────
+async function fetchScorers(compId, compInfo) {
+  const key = `fd_scorers_${compId}`;
+  const hit = getCached(key);
+  if (hit) return hit;
 
-// GET /api/matches
-app.get('/api/matches', async (req, res) => {
-  const activeLeagues = LEAGUES.filter(l => !l.isUpcoming);
+  try {
+    const data = await fdFetch(`/competitions/${compId}/scorers?limit=20`);
+    const scorers = (data.scorers || []).map(s => ({
+      player: { id: s.player?.id, name: s.player?.name },
+      team:   { id: s.team?.id, name: s.team?.name, crest: s.team?.crest || null },
+      goals:   s.goals   ?? 0,
+      assists: s.assists  ?? null,
+      penalties: s.penalties ?? null,
+    }));
 
-  const fetchPromises = activeLeagues.map(l => fetchESPNMatches(l.espn, l));
-  const results = await Promise.all(fetchPromises);
-  const allMatches = results.flat();
-
-  res.json({
-    count: allMatches.length,
-    matches: allMatches
-  });
-});
-
-// GET /api/standings/:code
-app.get('/api/standings/:code', async (req, res) => {
-  const { code } = req.params;
-  const league = LEAGUES.find(l => l.code === code || l.id === parseInt(code)) || LEAGUES[0];
-
-  const result = await fetchESPNStandings(league.espn, league);
-  if (!result) {
-    return res.status(404).json({ error: "Puan durumu şu an yüklenemedi." });
+    const result = { competition: compInfo, scorers };
+    setCache(key, result);
+    return result;
+  } catch (err) {
+    console.error(`[FD Scorers Error ${compId}]`, err.message);
+    return null;
   }
+}
 
+// ─── Fetch a single match detail ─────────────────────────────────────────────
+async function fetchMatchDetail(matchId) {
+  const key = `fd_match_${matchId}`;
+  const hit = getCached(key);
+  if (hit) return hit;
+
+  try {
+    const data = await fdFetch(`/matches/${matchId}`);
+    const m = normaliseMatch(data);
+    // Enrich with head2head if present
+    setCache(key, m);
+    return m;
+  } catch (err) {
+    console.error(`[FD Match Error ${matchId}]`, err.message);
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════════
+//  API Routes
+// ═══════════════════════════════════════════════════════════════════════════════
+
+// GET /api/competitions
+app.get('/api/competitions', (_req, res) => {
+  const all = [
+    ...COMPETITIONS.map(c => ({ ...c, id: c.fd })),
+    ...UPCOMING,
+  ];
+  res.json({ competitions: all });
+});
+
+// GET /api/matches?date=YYYY-MM-DD   (defaults to today)
+app.get('/api/matches', async (req, res) => {
+  const today   = new Date().toISOString().split('T')[0];
+  const dateStr = req.query.date || today;
+
+  const matches = await fetchTodayMatches(dateStr);
+  res.json({ count: matches.length, matches });
+});
+
+// GET /api/standings/:code   (code = PL | PD | SA | BL1 | FL1 | CL …)
+app.get('/api/standings/:code', async (req, res) => {
+  const comp = COMPETITIONS.find(c => c.code === req.params.code);
+  if (!comp) return res.status(404).json({ error: 'Lig bulunamadı.' });
+
+  const result = await fetchStandings(comp.fd, comp);
+  if (!result) return res.status(502).json({ error: 'Puan durumu yüklenemedi.' });
   res.json(result);
 });
 
 // GET /api/scorers/:code
 app.get('/api/scorers/:code', async (req, res) => {
-  const { code } = req.params;
-  const league = LEAGUES.find(l => l.code === code) || LEAGUES[0];
+  const comp = COMPETITIONS.find(c => c.code === req.params.code);
+  if (!comp) return res.status(404).json({ error: 'Lig bulunamadı.' });
 
-  const standingsResult = await fetchESPNStandings(league.espn, league);
-  const table = standingsResult?.standings?.[0]?.table || [];
-
-  // Generate top scorers based on real teams
-  const scorers = table.slice(0, 6).map((item, idx) => ({
-    player: { id: 800 + idx, name: `Golcü ${idx + 1} (${item.team.name})` },
-    team: { name: item.team.name },
-    goals: 18 - idx * 2,
-    assists: 7 - Math.floor(idx / 2)
-  }));
-
-  res.json({ competition: league, scorers });
+  const result = await fetchScorers(comp.fd, comp);
+  if (!result) return res.status(502).json({ error: 'Gol krallığı yüklenemedi.' });
+  res.json(result);
 });
 
 // GET /api/match/:id
 app.get('/api/match/:id', async (req, res) => {
-  const { id } = req.params;
-  const activeLeagues = LEAGUES.filter(l => !l.isUpcoming);
-
-  for (let l of activeLeagues) {
-    const matches = await fetchESPNMatches(l.espn, l);
-    const found = matches.find(m => String(m.id) === String(id));
-    if (found) return res.json({ match: found });
-  }
-
-  res.status(404).json({ error: "Maç bulunamadı." });
+  const match = await fetchMatchDetail(req.params.id);
+  if (!match) return res.status(404).json({ error: 'Maç bulunamadı.' });
+  res.json({ match });
 });
 
-// Serve Static Dist Bundle
+// ─── Serve React build ────────────────────────────────────────────────────────
 const distPath = path.join(__dirname, '../dist');
 if (fs.existsSync(distPath)) {
   app.use(express.static(distPath));
-  app.get('*', (req, res) => {
-    res.sendFile(path.join(distPath, 'index.html'));
-  });
+  app.get('*', (_req, res) => res.sendFile(path.join(distPath, 'index.html')));
 }
 
 app.listen(PORT, () => {
-  console.log(`[DA/SCORE Real-Time Server] Listening on http://localhost:${PORT}`);
+  console.log(`[DA/SCORE] Server running on http://localhost:${PORT}`);
+  console.log(`[DA/SCORE] Data source: football-data.org (free tier)`);
 });
