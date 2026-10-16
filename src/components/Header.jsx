@@ -1,35 +1,14 @@
 import React from 'react';
-import { Volume2, VolumeX, Search, Sliders, Calendar } from 'lucide-react';
+import { Volume2, VolumeX, Search, Sliders } from 'lucide-react';
 
 export default function Header({
   searchQuery,
   setSearchQuery,
   soundEnabled,
   setSoundEnabled,
-  selectedDate,
-  setSelectedDate,
   onOpenCustomization,
   liveCount
 }) {
-  const getFormattedDateLabel = (dateStr) => {
-    const todayStr = new Date().toISOString().split('T')[0];
-    const yesterday = new Date(Date.now() - 86400000).toISOString().split('T')[0];
-    const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
-
-    if (dateStr === todayStr) return 'Bugün';
-    if (dateStr === yesterday) return 'Dün';
-    if (dateStr === tomorrow) return 'Yarın';
-
-    const parts = dateStr.split('-');
-    return `${parts[2]}.${parts[1]}`;
-  };
-
-  const dates = [
-    new Date(Date.now() - 86400000).toISOString().split('T')[0],
-    new Date().toISOString().split('T')[0],
-    new Date(Date.now() + 86400000).toISOString().split('T')[0]
-  ];
-
   return (
     <header style={{
       background: 'var(--bg-secondary)',
@@ -72,57 +51,6 @@ export default function Header({
           </div>
         </div>
 
-        {/* Date Selector */}
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
-          gap: 4,
-          background: 'var(--bg-primary)',
-          padding: 4,
-          borderRadius: 10,
-          border: '1px solid var(--border-color)'
-        }}>
-          {dates.map(d => (
-            <button
-              key={d}
-              onClick={() => setSelectedDate(d)}
-              style={{
-                background: selectedDate === d ? 'var(--accent-green)' : 'transparent',
-                color: selectedDate === d ? '#ffffff' : 'var(--text-main)',
-                fontWeight: selectedDate === d ? 800 : 500,
-                border: 'none',
-                padding: '6px 14px',
-                borderRadius: 8,
-                fontSize: '0.82rem',
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              {getFormattedDateLabel(d)}
-            </button>
-          ))}
-          <label style={{
-            display: 'flex',
-            alignItems: 'center',
-            padding: '6px 8px',
-            cursor: 'pointer',
-            color: 'var(--text-muted)'
-          }}>
-            <Calendar size={16} />
-            <input
-              type="date"
-              value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
-              style={{
-                position: 'absolute',
-                opacity: 0,
-                width: 20,
-                cursor: 'pointer'
-              }}
-            />
-          </label>
-        </div>
-
         {/* Search & Actions */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           {/* Search Box */}
@@ -134,7 +62,7 @@ export default function Header({
             <Search size={15} style={{ position: 'absolute', left: 10, color: 'var(--text-muted)' }} />
             <input
               type="text"
-              placeholder="Takım veya lig ara..."
+              placeholder="Takım, lig veya maç ara..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               style={{
@@ -145,11 +73,11 @@ export default function Header({
                 color: 'var(--text-main)',
                 fontSize: '0.82rem',
                 outline: 'none',
-                width: 170,
+                width: 190,
                 transition: 'all 0.2s ease'
               }}
-              onFocus={(e) => e.target.style.width = '210px'}
-              onBlur={(e) => e.target.style.width = '170px'}
+              onFocus={(e) => e.target.style.width = '230px'}
+              onBlur={(e) => e.target.style.width = '190px'}
             />
           </div>
 
