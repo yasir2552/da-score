@@ -9,6 +9,7 @@ import CustomizationModal from './components/CustomizationModal';
 import { useFootballData } from './hooks/useFootballData';
 import { audioService } from './services/audio';
 import SocialFooter from './components/SocialFooter';
+import AdBanner from './components/AdBanner';
 
 // ── Goal Notification Banner ──────────────────────────────────────────────────
 function GoalBanner({ goals, onDone }) {
@@ -175,6 +176,8 @@ export default function App() {
           </>
         )}
       </main>
+
+      <AdBanner />
 
       <SocialFooter />
 

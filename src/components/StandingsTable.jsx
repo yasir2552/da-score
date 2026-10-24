@@ -1,15 +1,29 @@
 import React, { useState, useEffect } from 'react';
-import { Award, RefreshCw } from 'lucide-react';
+import { Award } from 'lucide-react';
 import { fetchStandings } from '../services/api';
 
 export default function StandingsTable({ competitions }) {
-  const [selectedLeague, setSelectedLeague] = useState('TSL');
+  const activeCompetitions = (competitions || []).filter(c => !c.isUpcoming);
+  const defaultLeague = activeCompetitions[0]?.code || 'PL';
+
+  const [selectedLeague, setSelectedLeague] = useState(defaultLeague);
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+
+  // When competitions arrive, make sure selectedLeague is a valid active competition
+  useEffect(() => {
+    if (activeCompetitions.length > 0) {
+      const exists = activeCompetitions.some(c => (c.code || c.id) === selectedLeague);
+      if (!exists) {
+        setSelectedLeague(activeCompetitions[0].code || activeCompetitions[0].id);
+      }
+    }
+  }, [competitions]);
 
   useEffect(() => {
     let isMounted = true;
     async function load() {
+      if (!selectedLeague) return;
       setLoading(true);
       const res = await fetchStandings(selectedLeague);
       if (isMounted) {
@@ -20,8 +34,6 @@ export default function StandingsTable({ competitions }) {
     load();
     return () => { isMounted = false; };
   }, [selectedLeague]);
-
-  const activeCompetitions = competitions.filter(c => !c.isUpcoming);
 
   const tableData = data?.standings?.[0]?.table || [];
 
@@ -61,7 +73,7 @@ export default function StandingsTable({ competitions }) {
         >
           {activeCompetitions.map(c => (
             <option key={c.code || c.id} value={c.code || c.id}>
-              {c.name} ({c.area?.name})
+              {c.area?.emoji || '🏆'} {c.name} ({c.area?.name})
             </option>
           ))}
         </select>
@@ -69,7 +81,8 @@ export default function StandingsTable({ competitions }) {
 
       {loading ? (
         <div style={{ padding: 40, textAlign: 'center', color: 'var(--accent-green)' }}>
-          Puan durumu yükleniyor...
+          <div className="spinner"></div>
+          <p style={{ marginTop: 8, fontWeight: 700 }}>Puan durumu yükleniyor...</p>
         </div>
       ) : tableData.length === 0 ? (
         <div style={{ padding: 30, textAlign: 'center', color: 'var(--text-muted)' }}>
@@ -92,22 +105,22 @@ export default function StandingsTable({ competitions }) {
               }}>
                 <th style={{ padding: '10px 8px', textAlign: 'center', width: 40 }}>Sıra</th>
                 <th style={{ padding: '10px 8px' }}>Takım</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center' }}>O</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center' }}>G</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center' }}>B</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center' }}>M</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center' }}>AG</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center' }}>YG</th>
-                <th style={{ padding: '10px 6px', textAlign: 'center' }}>AV</th>
-                <th style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 800, color: 'var(--accent-green)' }}>P</th>
+                <th style={{ padding: '10px 6px', textAlign: 'center' }} title="Oynanan Maç">O</th>
+                <th style={{ padding: '10px 6px', textAlign: 'center' }} title="Galibiyet">G</th>
+                <th style={{ padding: '10px 6px', textAlign: 'center' }} title="Beraberlik">B</th>
+                <th style={{ padding: '10px 6px', textAlign: 'center' }} title="Mağlubiyet">M</th>
+                <th style={{ padding: '10px 6px', textAlign: 'center' }} title="Atılan Gol">AG</th>
+                <th style={{ padding: '10px 6px', textAlign: 'center' }} title="Yenilen Gol">YG</th>
+                <th style={{ padding: '10px 6px', textAlign: 'center' }} title="Averaj">AV</th>
+                <th style={{ padding: '10px 8px', textAlign: 'center', fontWeight: 800, color: 'var(--accent-green)' }} title="Puan">P</th>
               </tr>
             </thead>
             <tbody>
               {tableData.map((row) => {
                 let posColor = 'transparent';
-                if (row.position <= 4) posColor = 'rgba(0, 255, 117, 0.15)'; // Champions League
-                else if (row.position === 5) posColor = 'rgba(52, 199, 89, 0.08)'; // Europa League
-                else if (row.position >= tableData.length - 2) posColor = 'rgba(255, 71, 87, 0.1)'; // Relegation
+                if (row.position <= 4) posColor = 'rgba(0, 255, 117, 0.12)';
+                else if (row.position === 5) posColor = 'rgba(52, 199, 89, 0.08)';
+                else if (row.position >= tableData.length - 2) posColor = 'rgba(255, 71, 87, 0.1)';
 
                 return (
                   <tr
@@ -130,7 +143,12 @@ export default function StandingsTable({ competitions }) {
                     <td style={{ padding: '10px 8px', fontWeight: 700 }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
                         {row.team?.crest && (
-                          <img src={row.team.crest} alt="" style={{ width: 22, height: 22, objectFit: 'contain' }} />
+                          <img
+                            src={row.team.crest}
+                            alt=""
+                            onError={(e) => e.target.style.display = 'none'}
+                            style={{ width: 22, height: 22, objectFit: 'contain' }}
+                          />
                         )}
                         <span>{row.team?.shortName || row.team?.name}</span>
                       </div>

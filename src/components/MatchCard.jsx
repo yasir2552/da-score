@@ -1,15 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Star, Shield } from 'lucide-react';
+import { Star } from 'lucide-react';
 
-// Normalize Turkish characters for search
-function normalize(str) {
-  return (str || '')
-    .toLowerCase()
-    .replace(/ğ/g, 'g').replace(/ü/g, 'u').replace(/ş/g, 's')
-    .replace(/ı/g, 'i').replace(/ö/g, 'o').replace(/ç/g, 'c');
-}
-
-export default function MatchCard({ match, onSelectMatch, favoriteMatchIds, onToggleFavorite, isGoal }) {
+export default function MatchCard({ match, onSelectMatch, favoriteMatchIds, onToggleFavorite }) {
   const isFavorite = favoriteMatchIds.includes(match.id);
   const [homeCrestError, setHomeCrestError] = useState(false);
   const [awayCrestError, setAwayCrestError] = useState(false);
@@ -26,12 +18,12 @@ export default function MatchCard({ match, onSelectMatch, favoriteMatchIds, onTo
     const newAway = match.score?.fullTime?.away;
     let scored = false;
 
-    if (prevHomeScore.current !== null && newHome !== null && newHome > prevHomeScore.current) {
+    if (prevHomeScore.current !== null && prevHomeScore.current !== undefined && newHome !== null && newHome !== undefined && newHome > prevHomeScore.current) {
       setHomeScorePop(false);
       requestAnimationFrame(() => setHomeScorePop(true));
       scored = true;
     }
-    if (prevAwayScore.current !== null && newAway !== null && newAway > prevAwayScore.current) {
+    if (prevAwayScore.current !== null && prevAwayScore.current !== undefined && newAway !== null && newAway !== undefined && newAway > prevAwayScore.current) {
       setAwayScorePop(false);
       requestAnimationFrame(() => setAwayScorePop(true));
       scored = true;
@@ -59,7 +51,7 @@ export default function MatchCard({ match, onSelectMatch, favoriteMatchIds, onTo
           display: 'inline-flex', alignItems: 'center', gap: 5
         }}>
           <span className="live-pulse"></span>
-          <span>{match.minute ? `${match.minute}'` : 'CANLI'}</span>
+          <span>{match.minute ? `${match.minute}'` : (s === 'PAUSED' ? 'İY' : 'CANLI')}</span>
         </div>
       );
     }
@@ -71,8 +63,28 @@ export default function MatchCard({ match, onSelectMatch, favoriteMatchIds, onTo
         }}>MS</span>
       );
     }
+    if (s === 'POSTPONED') {
+      return (
+        <span style={{
+          color: 'var(--accent-gold)', fontSize: '0.75rem', fontWeight: 800,
+          background: 'rgba(245, 158, 11, 0.1)', padding: '3px 8px', borderRadius: 10
+        }}>ERT.</span>
+      );
+    }
+    if (s === 'CANCELLED') {
+      return (
+        <span style={{
+          color: 'var(--accent-red)', fontSize: '0.75rem', fontWeight: 800,
+          background: 'rgba(239, 68, 68, 0.1)', padding: '3px 8px', borderRadius: 10
+        }}>İPTAL</span>
+      );
+    }
+
     const dateObj = new Date(match.utcDate);
-    const timeStr = dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' });
+    const timeStr = !isNaN(dateObj.getTime())
+      ? dateObj.toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })
+      : '--:--';
+
     return (
       <span style={{ color: 'var(--accent-green)', fontSize: '0.85rem', fontWeight: 800 }}>
         {timeStr}
@@ -140,7 +152,7 @@ export default function MatchCard({ match, onSelectMatch, favoriteMatchIds, onTo
               key={`h-${match.score?.fullTime?.home}`}
               className={homeScorePop ? 'score-pop' : ''}
               style={{ fontWeight: 900, fontSize: '1.1rem',
-                color: match.score?.fullTime?.home !== null ? 'var(--accent-green)' : 'var(--text-muted)',
+                color: match.score?.fullTime?.home !== null && match.score?.fullTime?.home !== undefined ? 'var(--accent-green)' : 'var(--text-muted)',
                 flexShrink: 0
               }}
             >
@@ -163,7 +175,7 @@ export default function MatchCard({ match, onSelectMatch, favoriteMatchIds, onTo
               key={`a-${match.score?.fullTime?.away}`}
               className={awayScorePop ? 'score-pop' : ''}
               style={{ fontWeight: 900, fontSize: '1.1rem',
-                color: match.score?.fullTime?.away !== null ? 'var(--accent-green)' : 'var(--text-muted)',
+                color: match.score?.fullTime?.away !== null && match.score?.fullTime?.away !== undefined ? 'var(--accent-green)' : 'var(--text-muted)',
                 flexShrink: 0
               }}
             >

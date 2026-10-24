@@ -7,6 +7,21 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Outfit:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- Google AdSense / Auto Ads Altyapısı -->
+    <script>
+      (function() {
+        const client = "%VITE_ADSENSE_ID%";
+        // Eğer placeholder değiştirilmemişse veya boşsa çalıştırılmaz
+        if (client && !client.startsWith("%") && client.trim() !== "") {
+          const s = document.createElement("script");
+          s.async = true;
+          s.src = "https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=" + encodeURIComponent(client);
+          s.crossOrigin = "anonymous";
+          document.head.appendChild(s);
+        }
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

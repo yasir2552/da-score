@@ -13,7 +13,29 @@ const __dirname = path.dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 3001;
 
-app.use(cors());
+// ─── Güvenlik: CORS Kısıtlaması ──────────────────────────────────────────────
+const allowedOrigins = [
+  process.env.FRONTEND_URL,
+  process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null,
+  'http://localhost:5173',
+  'http://localhost:3000',
+  'http://localhost:3001'
+].filter(Boolean);
+
+const corsOptions = {
+  origin: (origin, callback) => {
+    if (!origin) return callback(null, true);
+    const isAllowed = allowedOrigins.includes(origin) || origin.endsWith('.vercel.app') || origin.endsWith('.onrender.com');
+    if (isAllowed) {
+      return callback(null, true);
+    }
+    return callback(new Error('CORS kuralı gereği bu kaynağa erişim engellendi.'));
+  },
+  methods: ['GET', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With']
+};
+
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // ─── football-data.org Config ────────────────────────────────────────────────
@@ -21,9 +43,9 @@ const FD_API_KEY = process.env.FOOTBALL_DATA_API_KEY || '6ded839f7c8444fa9088924
 const FD_BASE    = 'https://api.football-data.org/v4';
 const FD_HEADERS = { 'X-Auth-Token': FD_API_KEY };
 
-// ─── In-Memory Cache (50 s TTL – frontend polls every 60 s) ──────────────────
+// ─── In-Memory Cache (50 s TTL – API kotasını korumak için Rate Limiting) ───
 const cache    = new Map();
-const CACHE_TTL = 50_000; // 50 seconds
+const CACHE_TTL = 50_000; // 50 saniye
 
 function getCached(key) {
   const item = cache.get(key);
@@ -34,8 +56,7 @@ function setCache(key, data) {
   cache.set(key, { ts: Date.now(), data });
 }
 
-// ─── League / Competition Metadata ───────────────────────────────────────────
-// fd: football-data competition ID
+// ─── Ligler / Turnuvalar ─────────────────────────────────────────────────────
 const COMPETITIONS = [
   { fd: 2021, code: 'PL',  name: 'Premier League',           area: { name: 'İngiltere',  emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' } },
   { fd: 2001, code: 'CL',  name: 'UEFA Şampiyonlar Ligi',    area: { name: 'Avrupa',     emoji: '🇪🇺' } },
@@ -51,7 +72,6 @@ const COMPETITIONS = [
   { fd: 2000, code: 'WC',  name: 'FIFA Dünya Kupası',        area: { name: 'Dünya',      emoji: '🌍' } },
 ];
 
-// Upcoming / soon leagues (no real-time data)
 const UPCOMING = [
   { code: 'TSL',  name: 'Trendyol Süper Lig',           area: { name: 'Türkiye',      emoji: '🇹🇷' }, isUpcoming: true },
   { code: 'T1L',  name: 'Trendyol 1. Lig',              area: { name: 'Türkiye',      emoji: '🇹🇷' }, isUpcoming: true },
@@ -59,14 +79,12 @@ const UPCOMING = [
   { code: 'MLS',  name: 'Major League Soccer',           area: { name: 'ABD',          emoji: '🇺🇸' }, isUpcoming: true },
 ];
 
-// ─── Helper: fetch from football-data.org ────────────────────────────────────
 async function fdFetch(path) {
   const res = await fetch(`${FD_BASE}${path}`, { headers: FD_HEADERS });
   if (!res.ok) throw new Error(`football-data API ${res.status}: ${path}`);
   return res.json();
 }
 
-// ─── Normalise a single match from football-data.org ─────────────────────────
 function normaliseMatch(m) {
   const comp = COMPETITIONS.find(c => c.fd === m.competition?.id) || {
     fd:   m.competition?.id,
@@ -79,7 +97,7 @@ function normaliseMatch(m) {
     id:     m.id,
     competition: { id: comp.fd, code: comp.code, name: comp.name, area: comp.area },
     utcDate: m.utcDate,
-    status:  m.status,       // SCHEDULED | TIMED | IN_PLAY | PAUSED | FINISHED | POSTPONED
+    status:  m.status,
     minute:  m.minute ?? null,
     venue:   m.venue ?? null,
     homeTeam: {
@@ -105,7 +123,6 @@ function normaliseMatch(m) {
       },
       winner: m.score?.winner ?? null,
     },
-    // football-data.org free tier does not supply live stats; we leave null
     stats: null,
     events: [],
   };
@@ -119,7 +136,6 @@ function areaEmoji(code) {
   return map[code] || '⚽';
 }
 
-// ─── Fetch today's matches (all competitions) ─────────────────────────────────
 async function fetchTodayMatches(dateStr) {
   const key = `fd_matches_${dateStr}`;
   const hit = getCached(key);
@@ -136,7 +152,6 @@ async function fetchTodayMatches(dateStr) {
   }
 }
 
-// ─── Fetch standings for a competition ───────────────────────────────────────
 async function fetchStandings(compId, compInfo) {
   const key = `fd_standings_${compId}`;
   const hit = getCached(key);
@@ -176,7 +191,6 @@ async function fetchStandings(compId, compInfo) {
   }
 }
 
-// ─── Fetch top scorers for a competition ─────────────────────────────────────
 async function fetchScorers(compId, compInfo) {
   const key = `fd_scorers_${compId}`;
   const hit = getCached(key);
@@ -201,7 +215,6 @@ async function fetchScorers(compId, compInfo) {
   }
 }
 
-// ─── Fetch a single match detail ─────────────────────────────────────────────
 async function fetchMatchDetail(matchId) {
   const key = `fd_match_${matchId}`;
   const hit = getCached(key);
@@ -210,7 +223,6 @@ async function fetchMatchDetail(matchId) {
   try {
     const data = await fdFetch(`/matches/${matchId}`);
     const m = normaliseMatch(data);
-    // Enrich with head2head if present
     setCache(key, m);
     return m;
   } catch (err) {
@@ -223,7 +235,6 @@ async function fetchMatchDetail(matchId) {
 //  API Routes
 // ═══════════════════════════════════════════════════════════════════════════════
 
-// GET /api/competitions
 app.get('/api/competitions', (_req, res) => {
   const all = [
     ...COMPETITIONS.map(c => ({ ...c, id: c.fd })),
@@ -232,7 +243,6 @@ app.get('/api/competitions', (_req, res) => {
   res.json({ competitions: all });
 });
 
-// GET /api/matches?date=YYYY-MM-DD   (defaults to today)
 app.get('/api/matches', async (req, res) => {
   const today   = new Date().toISOString().split('T')[0];
   const dateStr = req.query.date || today;
@@ -241,7 +251,6 @@ app.get('/api/matches', async (req, res) => {
   res.json({ count: matches.length, matches });
 });
 
-// GET /api/standings/:code   (code = PL | PD | SA | BL1 | FL1 | CL …)
 app.get('/api/standings/:code', async (req, res) => {
   const comp = COMPETITIONS.find(c => c.code === req.params.code);
   if (!comp) return res.status(404).json({ error: 'Lig bulunamadı.' });
@@ -251,7 +260,6 @@ app.get('/api/standings/:code', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/scorers/:code
 app.get('/api/scorers/:code', async (req, res) => {
   const comp = COMPETITIONS.find(c => c.code === req.params.code);
   if (!comp) return res.status(404).json({ error: 'Lig bulunamadı.' });
@@ -261,7 +269,6 @@ app.get('/api/scorers/:code', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/match/:id
 app.get('/api/match/:id', async (req, res) => {
   const match = await fetchMatchDetail(req.params.id);
   if (!match) return res.status(404).json({ error: 'Maç bulunamadı.' });
@@ -277,5 +284,5 @@ if (fs.existsSync(distPath)) {
 
 app.listen(PORT, () => {
   console.log(`[DA/SCORE] Server running on http://localhost:${PORT}`);
-  console.log(`[DA/SCORE] Data source: football-data.org (free tier)`);
+  console.log(`[DA/SCORE] Data source: football-data.org (protected proxy)`);
 });
