@@ -10,6 +10,8 @@ import { useFootballData } from './hooks/useFootballData';
 import { audioService } from './services/audio';
 import SocialFooter from './components/SocialFooter';
 import AdBanner from './components/AdBanner';
+import LegalModal from './components/LegalModal';
+import CookieBanner from './components/CookieBanner';
 
 // ── Goal Notification Banner ──────────────────────────────────────────────────
 function GoalBanner({ goals, onDone }) {
@@ -61,6 +63,13 @@ export default function App() {
   const [selectedMatchId,    setSelectedMatchId]    = useState(null);
   const [goalNotification,   setGoalNotification]   = useState(null);
   const [isCustomizationOpen, setIsCustomizationOpen] = useState(false);
+  const [isLegalModalOpen,    setIsLegalModalOpen]    = useState(false);
+  const [legalInitialTab,     setLegalInitialTab]     = useState('kvkk');
+
+  const handleOpenLegal = (tab = 'kvkk') => {
+    setLegalInitialTab(tab);
+    setIsLegalModalOpen(true);
+  };
 
   // ── Persisted preferences ─────────────────────────────────────────────────
   const [theme,         setTheme]         = useState(() => localStorage.getItem('da_theme')         || 'skyblue');
@@ -179,7 +188,9 @@ export default function App() {
 
       <AdBanner />
 
-      <SocialFooter />
+      <SocialFooter onOpenLegal={handleOpenLegal} />
+
+      <CookieBanner onOpenLegal={handleOpenLegal} />
 
       {selectedMatchId && (
         <MatchDetailModal
@@ -195,6 +206,12 @@ export default function App() {
         soundEnabled={soundEnabled} setSoundEnabled={setSoundEnabled}
         soundType={soundType} setSoundType={setSoundType}
         favoriteTeams={favoriteTeams} setFavoriteTeams={setFavoriteTeams}
+      />
+
+      <LegalModal
+        isOpen={isLegalModalOpen}
+        onClose={() => setIsLegalModalOpen(false)}
+        initialTab={legalInitialTab}
       />
     </div>
   );
