@@ -1,5 +1,5 @@
 import React from 'react';
-import { Volume2, VolumeX, Search, Sliders, Calendar } from 'lucide-react';
+import { Volume2, VolumeX, Search, Sliders, Calendar, ChevronLeft, ChevronRight, RotateCcw } from 'lucide-react';
 
 export default function Header({
   searchQuery,
@@ -21,6 +21,28 @@ export default function Header({
   const yesterdayISO = getOffsetDateISO(-1);
   const todayISO     = getTodayISO();
   const tomorrowISO  = getOffsetDateISO(1);
+
+  // Günleri 1 gün geri / ileri kaydırma (Maçkolik tarzı)
+  const stepDate = (days) => {
+    const base = selectedDate || todayISO;
+    const [y, m, d] = base.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    dateObj.setDate(dateObj.getDate() + days);
+    const yyyy = dateObj.getFullYear();
+    const mm = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const dd = String(dateObj.getDate()).padStart(2, '0');
+    setSelectedDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  // Tarih etiketini Türkçe formatlama
+  const formatCustomDateLabel = (dateStr) => {
+    if (!dateStr) return 'Bugün';
+    const [y, m, d] = dateStr.split('-').map(Number);
+    const dateObj = new Date(y, m - 1, d);
+    return dateObj.toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', weekday: 'short' });
+  };
+
+  const isQuickDate = selectedDate === yesterdayISO || selectedDate === todayISO || selectedDate === tomorrowISO;
 
   const quickDates = [
     { label: 'Dün',   value: yesterdayISO },
@@ -70,16 +92,38 @@ export default function Header({
           </div>
         </div>
 
-        {/* Working Dün / Bugün / Yarın Date Filter */}
+        {/* Maçkolik Tarzı Tarih Seçici (Önceki Gün / Takvim / Sonraki Gün) */}
         <div style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 4,
+          gap: 2,
           background: 'var(--bg-primary)',
-          padding: 4,
-          borderRadius: 10,
+          padding: '3px 6px',
+          borderRadius: 12,
           border: '1px solid var(--border-color)'
         }}>
+          {/* Önceki Gün Butonu (◀) */}
+          <button
+            onClick={() => stepDate(-1)}
+            title="Önceki Günün Maçları"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              padding: '6px 6px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-green)'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            <ChevronLeft size={18} />
+          </button>
+
+          {/* Dün / Bugün / Yarın Butonları */}
           {quickDates.map(qd => {
             const isActive = selectedDate === qd.value;
             return (
@@ -91,7 +135,7 @@ export default function Header({
                   color: isActive ? '#000000' : 'var(--text-main)',
                   fontWeight: isActive ? 900 : 600,
                   border: 'none',
-                  padding: '6px 14px',
+                  padding: '5px 12px',
                   borderRadius: 8,
                   fontSize: '0.82rem',
                   cursor: 'pointer',
@@ -103,23 +147,79 @@ export default function Header({
             );
           })}
 
-          {/* Optional custom date picker */}
+          {/* Eğer Dün/Bugün/Yarın harici eski veya ileri bir tarih seçildiyse onu göster */}
+          {!isQuickDate && (
+            <div style={{
+              background: 'rgba(0, 255, 117, 0.15)',
+              color: 'var(--accent-green)',
+              border: '1px solid var(--accent-green)',
+              fontWeight: 800,
+              padding: '4px 10px',
+              borderRadius: 8,
+              fontSize: '0.8rem',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              <span>{formatCustomDateLabel(selectedDate)}</span>
+              <button
+                onClick={() => setSelectedDate(todayISO)}
+                title="Bugüne Dön"
+                style={{
+                  background: 'transparent',
+                  border: 'none',
+                  color: 'inherit',
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex'
+                }}
+              >
+                <RotateCcw size={13} />
+              </button>
+            </div>
+          )}
+
+          {/* Sonraki Gün Butonu (▶) */}
+          <button
+            onClick={() => stepDate(1)}
+            title="Sonraki Günün Maçları"
+            style={{
+              background: 'transparent',
+              border: 'none',
+              color: 'var(--text-muted)',
+              padding: '6px 6px',
+              borderRadius: 8,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.color = 'var(--accent-green)'}
+            onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-muted)'}
+          >
+            <ChevronRight size={18} />
+          </button>
+
+          {/* Takvimden Tarih Seç (İstediğin Eski veya Gelecek Güne Atla) */}
           <label style={{
             display: 'flex',
             alignItems: 'center',
             padding: '6px 8px',
             cursor: 'pointer',
-            color: 'var(--text-muted)'
-          }} title="Tarih Seç">
-            <Calendar size={15} />
+            color: isQuickDate ? 'var(--text-muted)' : 'var(--accent-green)',
+            position: 'relative'
+          }} title="Takvimden Tarih Seç (Eski veya Gelecek Maçlar)">
+            <Calendar size={16} />
             <input
               type="date"
               value={selectedDate}
               onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
               style={{
                 position: 'absolute',
+                inset: 0,
                 opacity: 0,
-                width: 20,
+                width: '100%',
+                height: '100%',
                 cursor: 'pointer'
               }}
             />
