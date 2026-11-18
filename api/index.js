@@ -34,13 +34,13 @@ const FD_API_KEY = process.env.FOOTBALL_DATA_API_KEY || '6ded839f7c8444fa9088924
 const FD_BASE    = 'https://api.football-data.org/v4';
 const FD_HEADERS = { 'X-Auth-Token': FD_API_KEY };
 
-// Kaynak 2: ESPN Public Soccer API (Türkiye Süper Lig & Otomatik Yedekleme)
+// Kaynak 2: ESPN Public Soccer API (Türkiye Ligleri, Suudi Arabistan, MLS & Yedek)
 const ESPN_BASE  = 'https://site.api.espn.com/apis/site/v2/sports/soccer';
 const ESPN_V2    = 'https://site.api.espn.com/apis/v2/sports/soccer';
 
-// ─── In-Memory Cache (50 s TTL – Kota koruma ve hız) ─────────────────────────
+// ─── In-Memory Cache (50 s TTL) ──────────────────────────────────────────────
 const cache    = new Map();
-const CACHE_TTL = 50_000; // 50 saniye
+const CACHE_TTL = 50_000;
 
 function getCached(key) {
   const item = cache.get(key);
@@ -51,33 +51,37 @@ function setCache(key, data) {
   cache.set(key, { ts: Date.now(), data });
 }
 
-// ─── Ligler / Turnuvalar (Çift API Destekli) ──────────────────────────────────
+// ─── Ligler / Turnuvalar (TÜMÜ CANLI & AKTİF) ─────────────────────────────────
 const COMPETITIONS = [
+  // Türkiye Ligleri (ESPN)
   { id: 9901, code: 'TSL', name: 'Trendyol Süper Lig',        area: { name: 'Türkiye',      emoji: '🇹🇷' }, source: 'espn', espn: 'tur.1' },
+  { id: 9902, code: 'T1L', name: 'Trendyol 1. Lig',           area: { name: 'Türkiye',      emoji: '🇹🇷' }, source: 'espn', espn: 'tur.2' },
+
+  // Büyük Avrupa Ligleri (Football-Data.org + ESPN Fallback)
   { fd: 2021, code: 'PL',  name: 'Premier League',            area: { name: 'İngiltere',    emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, source: 'fd',   espn: 'eng.1' },
   { fd: 2001, code: 'CL',  name: 'UEFA Şampiyonlar Ligi',     area: { name: 'Avrupa',       emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.champions' },
   { fd: 2014, code: 'PD',  name: 'La Liga',                   area: { name: 'İspanya',      emoji: '🇪🇸' }, source: 'fd',   espn: 'esp.1' },
   { fd: 2019, code: 'SA',  name: 'Serie A',                   area: { name: 'İtalya',       emoji: '🇮🇹' }, source: 'fd',   espn: 'ita.1' },
   { fd: 2002, code: 'BL1', name: 'Bundesliga',                area: { name: 'Almanya',      emoji: '🇩🇪' }, source: 'fd',   espn: 'ger.1' },
-  { fd: 2015, code: 'FL1', name: 'Ligue 1',                   area: { name: 'Fransa',       emoji: '🇫🇷' }, source: 'fd',   espn: 'fra.1' },
-  { fd: 2003, code: 'EL',  name: 'UEFA Avrupa Ligi',          area: { name: 'Avrupa',       emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.europa' },
-  { fd: 2018, code: 'EL2', name: 'UEFA Konferans Ligi',       area: { name: 'Avrupa',       emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.europa.conf' },
-  { fd: 2017, code: 'PPL', name: 'Primeira Liga',             area: { name: 'Portekiz',     emoji: '🇵🇹' }, source: 'fd',   espn: 'por.1' },
-  { fd: 2016, code: 'ELC', name: 'Championship',              area: { name: 'İngiltere',    emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, source: 'fd',   espn: 'eng.2' },
-  { fd: 2013, code: 'BSA', name: 'Brasileirão Série A',       area: { name: 'Brezilya',     emoji: '🇧🇷' }, source: 'fd',   espn: 'bra.1' },
-  { fd: 2000, code: 'WC',  name: 'FIFA Dünya Kupası',         area: { name: 'Dünya',        emoji: '🌍' }, source: 'fd' },
+  { fd: 2015, code: 'FL1', name: 'Ligue 1',                  area: { name: 'Fransa',     emoji: '🇫🇷' }, source: 'fd',   espn: 'fra.1' },
+  { fd: 2003, code: 'EL',  name: 'UEFA Avrupa Ligi',          area: { name: 'Avrupa',     emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.europa' },
+  { fd: 2018, code: 'EL2', name: 'UEFA Konferans Ligi',       area: { name: 'Avrupa',     emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.europa.conf' },
+  { fd: 2017, code: 'PPL', name: 'Primeira Liga',             area: { name: 'Portekiz',   emoji: '🇵🇹' }, source: 'fd',   espn: 'por.1' },
+  { fd: 2016, code: 'ELC', name: 'Championship',              area: { name: 'İngiltere',  emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, source: 'fd',   espn: 'eng.2' },
+  { fd: 2013, code: 'BSA', name: 'Brasileirão Série A',       area: { name: 'Brezilya',   emoji: '🇧🇷' }, source: 'fd',   espn: 'bra.1' },
+  { fd: 2000, code: 'WC',  name: 'FIFA Dünya Kupası',         area: { name: 'Dünya',      emoji: '🌍' }, source: 'fd' },
+
+  // Popüler Dünya Ligleri (ESPN)
+  { id: 9903, code: 'SPL', name: 'Suudi Arabistan Pro Lig',   area: { name: 'S. Arabistan', emoji: '🇸🇦' }, source: 'espn', espn: 'ksa.1' },
+  { id: 9904, code: 'MLS', name: 'Major League Soccer (MLS)', area: { name: 'ABD',          emoji: '🇺🇸' }, source: 'espn', espn: 'usa.1' },
 ];
 
-const UPCOMING = [
-  { code: 'T1L',  name: 'Trendyol 1. Lig',              area: { name: 'Türkiye',      emoji: '🇹🇷' }, isUpcoming: true },
-  { code: 'SPL',  name: 'Suudi Arabistan Pro Lig',       area: { name: 'S. Arabistan', emoji: '🇸🇦' }, isUpcoming: true },
-  { code: 'MLS',  name: 'Major League Soccer',           area: { name: 'ABD',          emoji: '🇺🇸' }, isUpcoming: true },
-];
+const UPCOMING = [];
 
 function areaEmoji(code) {
   const map = {
     ENG: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ESP: '🇪🇸', ITA: '🇮🇹', DEU: '🇩🇪', FRA: '🇫🇷',
-    PRT: '🇵🇹', BRA: '🇧🇷', USA: '🇺🇸', TUR: '🇹🇷', EUR: '🇪🇺', WLD: '🌍',
+    PRT: '🇵🇹', BRA: '🇧🇷', USA: '🇺🇸', TUR: '🇹🇷', EUR: '🇪🇺', WLD: '🌍', KSA: '🇸🇦',
   };
   return map[code] || '⚽';
 }
@@ -221,7 +225,7 @@ function normaliseESPNMatch(ev, compInfo) {
   const home = comp?.competitors?.find(c => c.homeAway === 'home');
   const away = comp?.competitors?.find(c => c.homeAway === 'away');
 
-  const state = ev.status?.type?.state; // 'in', 'post', 'pre'
+  const state = ev.status?.type?.state;
   let status = 'TIMED';
   if (state === 'in') status = 'IN_PLAY';
   if (state === 'post') status = 'FINISHED';
@@ -419,19 +423,18 @@ async function fetchAllMatches(dateStr) {
     console.error('[Primary API: Football-Data hatası]', e.message);
   }
 
-  // 2. Kaynak: ESPN API (Trendyol Süper Lig)
+  // 2. Kaynak: ESPN API (Trendyol Süper Lig, 1. Lig, Suudi Ligi, MLS)
   let espnMatches = [];
   try {
-    const tslComp = COMPETITIONS.find(c => c.code === 'TSL');
-    if (tslComp) {
-      espnMatches = await fetchESPNMatches(tslComp.espn, tslComp, dateStr);
-    }
+    const espnComps = COMPETITIONS.filter(c => c.source === 'espn' && c.espn);
+    const espnPromises = espnComps.map(c => fetchESPNMatches(c.espn, c, dateStr));
+    const espnResults = await Promise.all(espnPromises);
+    espnMatches = espnResults.flat();
   } catch (e) {
-    console.error('[Secondary API: ESPN TSL hatası]', e.message);
+    console.error('[Secondary API: ESPN hatası]', e.message);
   }
 
   // 3. Otomatik Fallback (Yedek Devreye Girme):
-  // Eğer Football-Data.org hata verdiyse ya da kota tükendiyse, ESPN'deki büyük Avrupa liglerini otomatik çek
   if (fdMatches.length === 0) {
     try {
       const fallbackComps = COMPETITIONS.filter(c => c.source === 'fd' && c.espn);
@@ -443,18 +446,16 @@ async function fetchAllMatches(dateStr) {
     }
   }
 
-  // Tüm kaynakları birleştir ve önbelleğe al
   const allMatches = [...espnMatches, ...fdMatches];
   setCache(key, allMatches);
   return allMatches;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
-//  API Routes (Vercel Serverless & Local uyumlu)
+//  API Routes
 // ═══════════════════════════════════════════════════════════════════════════════
 const router = express.Router();
 
-// GET /api/competitions
 router.get('/competitions', (_req, res) => {
   const all = [
     ...COMPETITIONS.map(c => ({ ...c, id: c.fd || c.id })),
@@ -463,7 +464,6 @@ router.get('/competitions', (_req, res) => {
   res.json({ competitions: all });
 });
 
-// GET /api/matches?date=YYYY-MM-DD
 router.get('/matches', async (req, res) => {
   const today   = new Date().toISOString().split('T')[0];
   const dateStr = req.query.date || today;
@@ -472,22 +472,18 @@ router.get('/matches', async (req, res) => {
   res.json({ count: matches.length, matches });
 });
 
-// GET /api/standings/:code
 router.get('/standings/:code', async (req, res) => {
   const comp = COMPETITIONS.find(c => c.code === req.params.code);
   if (!comp) return res.status(404).json({ error: 'Lig bulunamadı.' });
 
   let result = null;
 
-  // Eğer lig ESPN kaynaklı ise (Örn: TSL) doğrudan ESPN'den çek
   if (comp.source === 'espn' && comp.espn) {
     result = await fetchESPNStandings(comp.espn, comp);
   } else {
-    // Önce Football-Data.org'u dene
     if (comp.fd) {
       result = await fetchStandingsFD(comp.fd, comp);
     }
-    // Eğer Football-Data yanıt veremezse yedek olarak ESPN'e başvur
     if (!result && comp.espn) {
       result = await fetchESPNStandings(comp.espn, comp);
     }
@@ -497,7 +493,6 @@ router.get('/standings/:code', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/scorers/:code
 router.get('/scorers/:code', async (req, res) => {
   const comp = COMPETITIONS.find(c => c.code === req.params.code);
   if (!comp) return res.status(404).json({ error: 'Lig bulunamadı.' });
@@ -519,17 +514,14 @@ router.get('/scorers/:code', async (req, res) => {
   res.json(result);
 });
 
-// GET /api/match/:id
 router.get('/match/:id', async (req, res) => {
   const { id } = req.params;
 
-  // Eğer ESPN id'si ise önbellekten veya bugünün maçlarından bul
   const today = new Date().toISOString().split('T')[0];
   const all = await fetchAllMatches(today);
   const found = all.find(m => String(m.id) === String(id));
   if (found) return res.json({ match: found });
 
-  // Football-Data'dan çekmeyi dene
   if (!String(id).startsWith('espn_')) {
     try {
       const data = await fdFetch(`/matches/${id}`);

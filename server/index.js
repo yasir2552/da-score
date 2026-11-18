@@ -59,33 +59,37 @@ function setCache(key, data) {
   cache.set(key, { ts: Date.now(), data });
 }
 
-// ─── Ligler / Turnuvalar (Çift API Destekli) ──────────────────────────────────
+// ─── Ligler / Turnuvalar (TÜMÜ CANLI & AKTİF) ─────────────────────────────────
 const COMPETITIONS = [
+  // Türkiye Ligleri (ESPN)
   { id: 9901, code: 'TSL', name: 'Trendyol Süper Lig',        area: { name: 'Türkiye',      emoji: '🇹🇷' }, source: 'espn', espn: 'tur.1' },
+  { id: 9902, code: 'T1L', name: 'Trendyol 1. Lig',           area: { name: 'Türkiye',      emoji: '🇹🇷' }, source: 'espn', espn: 'tur.2' },
+
+  // Büyük Avrupa Ligleri (Football-Data.org + ESPN Fallback)
   { fd: 2021, code: 'PL',  name: 'Premier League',            area: { name: 'İngiltere',    emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, source: 'fd',   espn: 'eng.1' },
   { fd: 2001, code: 'CL',  name: 'UEFA Şampiyonlar Ligi',     area: { name: 'Avrupa',       emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.champions' },
   { fd: 2014, code: 'PD',  name: 'La Liga',                   area: { name: 'İspanya',      emoji: '🇪🇸' }, source: 'fd',   espn: 'esp.1' },
   { fd: 2019, code: 'SA',  name: 'Serie A',                   area: { name: 'İtalya',       emoji: '🇮🇹' }, source: 'fd',   espn: 'ita.1' },
   { fd: 2002, code: 'BL1', name: 'Bundesliga',                area: { name: 'Almanya',      emoji: '🇩🇪' }, source: 'fd',   espn: 'ger.1' },
-  { fd: 2015, code: 'FL1', name: 'Ligue 1',                   area: { name: 'Fransa',     emoji: '🇫🇷' }, source: 'fd',   espn: 'fra.1' },
-  { fd: 2003, code: 'EL',  name: 'UEFA Avrupa Ligi',          area: { name: 'Avrupa',       emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.europa' },
+  { fd: 2015, code: 'FL1', name: 'Ligue 1',                  area: { name: 'Fransa',     emoji: '🇫🇷' }, source: 'fd',   espn: 'fra.1' },
+  { fd: 2003, code: 'EL',  name: 'UEFA Avrupa Ligi',          area: { name: 'Avrupa',     emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.europa' },
   { fd: 2018, code: 'EL2', name: 'UEFA Konferans Ligi',       area: { name: 'Avrupa',     emoji: '🇪🇺' }, source: 'fd',   espn: 'uefa.europa.conf' },
   { fd: 2017, code: 'PPL', name: 'Primeira Liga',             area: { name: 'Portekiz',   emoji: '🇵🇹' }, source: 'fd',   espn: 'por.1' },
-  { fd: 2016, code: 'ELC', name: 'Championship',              area: { name: 'İngiltere',    emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, source: 'fd',   espn: 'eng.2' },
-  { fd: 2013, code: 'BSA', name: 'Brasileirão Série A',       area: { name: 'Brezilya',     emoji: '🇧🇷' }, source: 'fd',   espn: 'bra.1' },
-  { fd: 2000, code: 'WC',  name: 'FIFA Dünya Kupası',         area: { name: 'Dünya',        emoji: '🌍' }, source: 'fd' },
+  { fd: 2016, code: 'ELC', name: 'Championship',              area: { name: 'İngiltere',  emoji: '🏴󠁧󠁢󠁥󠁮󠁧󠁿' }, source: 'fd',   espn: 'eng.2' },
+  { fd: 2013, code: 'BSA', name: 'Brasileirão Série A',       area: { name: 'Brezilya',   emoji: '🇧🇷' }, source: 'fd',   espn: 'bra.1' },
+  { fd: 2000, code: 'WC',  name: 'FIFA Dünya Kupası',         area: { name: 'Dünya',      emoji: '🌍' }, source: 'fd' },
+
+  // Popüler Dünya Ligleri (ESPN)
+  { id: 9903, code: 'SPL', name: 'Suudi Arabistan Pro Lig',   area: { name: 'S. Arabistan', emoji: '🇸🇦' }, source: 'espn', espn: 'ksa.1' },
+  { id: 9904, code: 'MLS', name: 'Major League Soccer (MLS)', area: { name: 'ABD',          emoji: '🇺🇸' }, source: 'espn', espn: 'usa.1' },
 ];
 
-const UPCOMING = [
-  { code: 'T1L',  name: 'Trendyol 1. Lig',              area: { name: 'Türkiye',      emoji: '🇹🇷' }, isUpcoming: true },
-  { code: 'SPL',  name: 'Suudi Arabistan Pro Lig',       area: { name: 'S. Arabistan', emoji: '🇸🇦' }, isUpcoming: true },
-  { code: 'MLS',  name: 'Major League Soccer',           area: { name: 'ABD',          emoji: '🇺🇸' }, isUpcoming: true },
-];
+const UPCOMING = [];
 
 function areaEmoji(code) {
   const map = {
     ENG: '🏴󠁧󠁢󠁥󠁮󠁧󠁿', ESP: '🇪🇸', ITA: '🇮🇹', DEU: '🇩🇪', FRA: '🇫🇷',
-    PRT: '🇵🇹', BRA: '🇧🇷', USA: '🇺🇸', TUR: '🇹🇷', EUR: '🇪🇺', WLD: '🌍',
+    PRT: '🇵🇹', BRA: '🇧🇷', USA: '🇺🇸', TUR: '🇹🇷', EUR: '🇪🇺', WLD: '🌍', KSA: '🇸🇦',
   };
   return map[code] || '⚽';
 }
@@ -129,8 +133,8 @@ function normaliseFDMatch(m) {
         away: m.score?.fullTime?.away ?? null,
       },
       halfTime: {
-        home: m.score?.halfTime?.home ?? null,
-        away: m.score?.halfTime?.away ?? null,
+        home: null,
+        away: null,
       },
       winner: m.score?.winner ?? null,
     },
@@ -419,12 +423,12 @@ async function fetchAllMatches(dateStr) {
 
   let espnMatches = [];
   try {
-    const tslComp = COMPETITIONS.find(c => c.code === 'TSL');
-    if (tslComp) {
-      espnMatches = await fetchESPNMatches(tslComp.espn, tslComp, dateStr);
-    }
+    const espnComps = COMPETITIONS.filter(c => c.source === 'espn' && c.espn);
+    const espnPromises = espnComps.map(c => fetchESPNMatches(c.espn, c, dateStr));
+    const espnResults = await Promise.all(espnPromises);
+    espnMatches = espnResults.flat();
   } catch (e) {
-    console.error('[Secondary API: ESPN TSL hatası]', e.message);
+    console.error('[Secondary API: ESPN hatası]', e.message);
   }
 
   if (fdMatches.length === 0) {
@@ -531,5 +535,5 @@ if (fs.existsSync(distPath)) {
 
 app.listen(PORT, () => {
   console.log(`[DA/SCORE] Server running on http://localhost:${PORT}`);
-  console.log(`[DA/SCORE] Multi-API active: football-data.org (Primary) + ESPN Soccer (Süper Lig & Fallback)`);
+  console.log(`[DA/SCORE] Multi-API active: football-data.org (Primary) + ESPN Soccer (Süper Lig, 1. Lig, Suudi Ligi, MLS)`);
 });
