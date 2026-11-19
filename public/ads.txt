@@ -1,0 +1,3 @@
+# DA/SCORE Google AdSense Authorized Digital Sellers (ads.txt)
+# Google AdSense hesabınız onaylandığında pub ID'nizi buraya ekleyin:
+# google.com, pub-XXXXXXXXXXXXXXXX, DIRECT, f08c47fec0942fa0

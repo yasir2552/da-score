@@ -1,0 +1,5 @@
+# DA/SCORE Robots.txt
+User-agent: *
+Allow: /
+
+Sitemap: https://da-score-mu.vercel.app/sitemap.xml
